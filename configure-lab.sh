@@ -23,12 +23,12 @@ openstack flavor create "m1.large" --id 4 --ram 8192 --disk 80 --vcpus 4
 openstack flavor create "m1.xlarge" --id 5 --ram 16384 --disk 160 --vcpus 8
 
 # Create provider network and subnet
-openstack network create --project "admin" --share --description "Provider Network - shared and external" --external --provider-network-type $PROVIDER_NETWORK_TYPE --provider-physical-network $PROVIDER_PHYSICAL_NETWORK provider
-openstack subnet create --project "admin" --network provider --subnet-range $PROVIDER_SUBNET_RANGE --allocation-pool start=$PROVIDER_SUBNET_ALLOCATION_START,end=$PROVIDER_SUBNET_ALLOCATION_END --dns-nameserver $PROVIDER_SUBNET_DNS_SERVER --gateway $PROVIDER_SUBNET_GATEWAY provider_subnet
+openstack network create --project "admin" --share --description "Provider Network - shared and external" --external --provider-network-type "${PROVIDER_NETWORK_TYPE}" --provider-physical-network "${PROVIDER_PHYSICAL_NETWORK}" provider
+openstack subnet create --project "admin" --network provider --subnet-range "${PROVIDER_SUBNET_RANGE}" --allocation-pool start=${PROVIDER_SUBNET_ALLOCATION_START},end=${PROVIDER_SUBNET_ALLOCATION_END} --dns-nameserver "${PROVIDER_SUBNET_DNS_SERVER}" --gateway "${PROVIDER_SUBNET_GATEWAY}" provider_subnet
 
 # Create public network and subnet
 openstack network create --project "admin" --share --description "Public Network - shared" public
-openstack subnet create --project "admin" --network public --subnet-range $PUBLIC_SUBNET_RANGE --allocation-pool start=$PUBLIC_SUBNET_ALLOCATION_START,end=$PUBLIC_SUBNET_ALLOCATION_END --dns-nameserver $PUBLIC_SUBNET_DNS_SERVER --gateway $PUBLIC_SUBNET_GATEWAY public_subnet
+openstack subnet create --project "admin" --network public --subnet-range "${PUBLIC_SUBNET_RANGE}" --allocation-pool start=${PUBLIC_SUBNET_ALLOCATION_START},end=${PUBLIC_SUBNET_ALLOCATION_END} --dns-nameserver "${PUBLIC_SUBNET_DNS_SERVER}" --gateway "${PUBLIC_SUBNET_GATEWAY}" public_subnet
 
 # Create public-ns-router
 openstack router create --project "admin" --description "Public North-South Router" public-ns-router
@@ -41,14 +41,14 @@ openstack container create container1
 # Set up bugs Project
 set +x
 openstack project create --domain default --description 'Lab 18 - Project "bugs"' bugs 2>&1 > /dev/null
-openstack user create --description "The wisest of them all" --project "bugs" --password $SHERLOCK_PASS sherlock 2>&1 > /dev/null
+openstack user create --description "The wisest of them all" --project "bugs" --password "${SHERLOCK_PASS}" sherlock 2>&1 > /dev/null
 openstack role add --project "bugs" --user "sherlock" user 2>&1 > /dev/null
 openstack quota set --volumes 1 bugs 2>&1 > /dev/null
 openstack network create --project "bugs" incognito 2>&1 > /dev/null
-openstack subnet create --project "bugs" --network incognito --subnet-range $INCOGNITO_SUBNET_RANGE --allocation-pool start=$INCOGNITO_SUBNET_ALLOCATION_START,end=$INCOGNITO_SUBNET_ALLOCATION_END --dns-nameserver $INCOGNITO_SUBNET_DNS_SERVER --gateway $INCOGNITO_SUBNET_GATEWAY incognito_subnet 2>&1 > /dev/null
-openstack volume create --os-project-name "bugs" --os-username "sherlock" --os-password $SHERLOCK_PASS --size 1 --description "Why is it here?" surprise 2>&1 > /dev/null
+openstack subnet create --project "bugs" --network incognito --subnet-range "${INCOGNITO_SUBNET_RANGE}" --allocation-pool start=${INCOGNITO_SUBNET_ALLOCATION_START},end=${INCOGNITO_SUBNET_ALLOCATION_END} --dns-nameserver "${INCOGNITO_SUBNET_DNS_SERVER}" --gateway "${INCOGNITO_SUBNET_GATEWAY}" incognito_subnet 2>&1 > /dev/null
+openstack volume create --os-project-name "bugs" --os-username "sherlock" --os-password "${SHERLOCK_PASS}" --size 1 --description "Why is it here?" surprise 2>&1 > /dev/null
 #CIRROS_ID=$(openstack image list -f value -c ID) 2>&1 > /dev/null
-nova --os-project-name "bugs" --os-username "sherlock" --os-password "openstack" boot --block-device source=image,id=$(openstack image list -f value -c ID -c Name | grep cirros | cut -f1 -d' '),dest=volume,size=1,shutdown=remove,bootindex=0 --flavor "m1.tiny" --nic net-name="incognito" bad-luck 2>&1 > /dev/null
+nova --os-project-name "bugs" --os-username "sherlock" --os-password "openstack" boot --block-device source=image,id="$(openstack image list -f value -c ID -c Name | awk '/cirros/ {print $1}')",dest=volume,size=1,shutdown=remove,bootindex=0 --flavor "m1.tiny" --nic net-name="incognito" bad-luck 2>&1 > /dev/null
 set -x
 
 # Prepare configuration for demo Project
@@ -56,7 +56,7 @@ source demo-openrc
 
 # Create private network and subnet in demo Project
 openstack network create --description "Demo private network" private
-openstack subnet create --network private --subnet-range $PRIVATE_SUBNET_RANGE --allocation-pool start=$PRIVATE_SUBNET_ALLOCATION_START,end=$PRIVATE_SUBNET_ALLOCATION_END --dns-nameserver $PRIVATE_SUBNET_DNS_SERVER --gateway $PRIVATE_SUBNET_GATEWAY private_subnet
+openstack subnet create --network private --subnet-range "${PRIVATE_SUBNET_RANGE}" --allocation-pool start=${PRIVATE_SUBNET_ALLOCATION_START},end=${PRIVATE_SUBNET_ALLOCATION_END} --dns-nameserver "${PRIVATE_SUBNET_DNS_SERVER}" --gateway "${PRIVATE_SUBNET_GATEWAY}" private_subnet
 
 # Create demo_NS_router
 openstack router create --description "Demo North-South Router" demo_NS_router
