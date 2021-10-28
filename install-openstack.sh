@@ -26,7 +26,6 @@ export DEBIAN_FRONTEND=noninteractive
 # from OpenStack Packages for Ubuntu https://docs.openstack.org/install-guide/environment-packages-ubuntu.html
 
 case "$(lsb_release -cs)" in
-  xenial) OS_RELEASE=queens;;
   bionic) OS_RELEASE=ussuri;;
   focal)  OS_RELEASE=xena;;  # codename y
 esac
@@ -42,12 +41,10 @@ apt install -y python3-openstackclient
 
 echo "Starting installation of SQL Database for Ubuntu"
 # workaround for Neutron bug in cloud-archive for bionic/train: https://bugs.launchpad.net/cloud-archive/+bug/1841907
-if [ "$(lsb_release -cs)" != "xenial" ]; then  # also shows how inconsistent of a RDBMS API MySQL is
-  apt -y install curl gnupg
-  curl -fsSL https://mariadb.org/mariadb_release_signing_key.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/mariadb-archive-keyring.gpg
-  echo deb http://mirror2.hs-esslingen.de/mariadb/repo/10.6/ubuntu $(lsb_release -cs) main > /etc/apt/sources.list.d/mariadb.list
-  apt update
-fi
+apt -y install curl gnupg
+curl -fsSL https://mariadb.org/mariadb_release_signing_key.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/mariadb-archive-keyring.gpg
+echo deb http://mirror2.hs-esslingen.de/mariadb/repo/10.6/ubuntu $(lsb_release -cs) main > /etc/apt/sources.list.d/mariadb.list
+apt update
 apt install -y mariadb-server python3-pymysql
 [ "$(lsb_release -cs)" = "focal" ] || apt install -y python-pymysql
 
@@ -63,16 +60,6 @@ character-set-server = utf8
 EOF
 
 service mysql restart
-if [ "$(lsb_release -cs)" = "xenial" ]; then
-mysql_secure_installation <<- EOF
-
-n
-y
-n
-y
-y
-EOF
-else
 mysql_secure_installation <<- EOF
 
 n
@@ -82,7 +69,6 @@ n
 y
 y
 EOF
-fi
 
 # from Message Queue for Ubuntu https://docs.openstack.org/install-guide/environment-messaging-ubuntu.html
 
@@ -274,8 +260,7 @@ openstack endpoint create --region RegionOne placement public "http://${CONTROLL
 openstack endpoint create --region RegionOne placement internal "http://${CONTROLLER_HOSTNAME}:8778"
 openstack endpoint create --region RegionOne placement admin "http://${CONTROLLER_HOSTNAME}:8778"
 
-apt install -y nova-api nova-conductor nova-novncproxy nova-scheduler
-[ "$(lsb_release -cs)" = "xenial" ] && apt install -y nova-consoleauth nova-placement-api || apt install -y placement-api
+apt install -y nova-api nova-conductor nova-novncproxy nova-scheduler placement-api
 
 crudini --set /etc/nova/nova.conf api_database connection "mysql+pymysql://nova:${NOVA_DBPASS}@${CONTROLLER_HOSTNAME}/nova_api"
 crudini --set /etc/nova/nova.conf database connection "mysql+pymysql://nova:${NOVA_DBPASS}@${CONTROLLER_HOSTNAME}/nova"
@@ -310,20 +295,18 @@ crudini --set /etc/nova/nova.conf placement auth_url "http://${CONTROLLER_HOSTNA
 crudini --set /etc/nova/nova.conf placement username placement
 crudini --set /etc/nova/nova.conf placement password "${PLACEMENT_PASS}"
 
-if [ "$(lsb_release -cs)" != "xenial" ]; then
-  crudini --set /etc/placement/placement.conf placement_database connection "mysql+pymysql://placement:${PLACEMENT_DBPASS}@${CONTROLLER_HOSTNAME}/placement"
-  crudini --set /etc/placement/placement.conf api auth_strategy keystone
-  crudini --set /etc/placement/placement.conf keystone_authtoken auth_uri "http://${CONTROLLER_HOSTNAME}:5000/v3"
-  crudini --set /etc/placement/placement.conf keystone_authtoken www_authenticate_uri "http://${CONTROLLER_HOSTNAME}:5000/v3"
-  crudini --set /etc/placement/placement.conf keystone_authtoken auth_url "http://${CONTROLLER_HOSTNAME}:5000/v3"
-  crudini --set /etc/placement/placement.conf keystone_authtoken memcached_servers "${CONTROLLER_HOSTNAME}:11211"
-  crudini --set /etc/placement/placement.conf keystone_authtoken auth_type password
-  crudini --set /etc/placement/placement.conf keystone_authtoken project_domain_name default
-  crudini --set /etc/placement/placement.conf keystone_authtoken user_domain_name default
-  crudini --set /etc/placement/placement.conf keystone_authtoken project_name service
-  crudini --set /etc/placement/placement.conf keystone_authtoken username placement
-  crudini --set /etc/placement/placement.conf keystone_authtoken password "${PLACEMENT_PASS}"
-fi
+crudini --set /etc/placement/placement.conf placement_database connection "mysql+pymysql://placement:${PLACEMENT_DBPASS}@${CONTROLLER_HOSTNAME}/placement"
+crudini --set /etc/placement/placement.conf api auth_strategy keystone
+crudini --set /etc/placement/placement.conf keystone_authtoken auth_uri "http://${CONTROLLER_HOSTNAME}:5000/v3"
+crudini --set /etc/placement/placement.conf keystone_authtoken www_authenticate_uri "http://${CONTROLLER_HOSTNAME}:5000/v3"
+crudini --set /etc/placement/placement.conf keystone_authtoken auth_url "http://${CONTROLLER_HOSTNAME}:5000/v3"
+crudini --set /etc/placement/placement.conf keystone_authtoken memcached_servers "${CONTROLLER_HOSTNAME}:11211"
+crudini --set /etc/placement/placement.conf keystone_authtoken auth_type password
+crudini --set /etc/placement/placement.conf keystone_authtoken project_domain_name default
+crudini --set /etc/placement/placement.conf keystone_authtoken user_domain_name default
+crudini --set /etc/placement/placement.conf keystone_authtoken project_name service
+crudini --set /etc/placement/placement.conf keystone_authtoken username placement
+crudini --set /etc/placement/placement.conf keystone_authtoken password "${PLACEMENT_PASS}"
 
 su -s /bin/sh -c "nova-manage api_db sync" nova
 
@@ -331,10 +314,10 @@ su -s /bin/sh -c "nova-manage cell_v2 map_cell0" nova
 su -s /bin/sh -c "nova-manage cell_v2 create_cell --name=cell1 --verbose" nova
 su -s /bin/sh -c "nova-manage db sync" nova
 nova-manage cell_v2 list_cells
-[ "$(lsb_release -cs)" = "xenial" ] || su -s /bin/sh -c "placement-manage db sync" placement
+su -s /bin/sh -c "placement-manage db sync" placement
 
 for i in api scheduler conductor novncproxy; do service "nova-${i}" restart; done
-[ "$(lsb_release -cs)" = "xenial" ] && service nova-consoleauth restart || service apache2 restart
+service apache2 restart
 
 # from Install and configure compute node for Ubuntu https://docs.openstack.org/nova/pike/install/compute-install-ubuntu.html
 
@@ -385,10 +368,8 @@ echo "Executing openstack compute service list"
 openstack compute service list
 echo "Executing nova-status upgrade check"
 nova-status upgrade check
-if [ "$(lsb_release -cs)" != "xenial" ]; then
-  echo "Executing placement-status upgrade check"
-  placement-status upgrade check
-fi
+echo "Executing placement-status upgrade check"
+placement-status upgrade check
 
 # from Install and configure Neutron controller node https://docs.openstack.org/neutron/pike/install/controller-install-ubuntu.html
 
@@ -400,6 +381,14 @@ GRANT ALL PRIVILEGES ON neutron.* TO 'neutron'@'localhost' IDENTIFIED BY '${NEUT
 GRANT ALL PRIVILEGES ON neutron.* TO 'neutron'@'%' IDENTIFIED BY '${NEUTRON_DBPASS}';
 EOF
 
+# Octavia
+mysql <<- EOF
+CREATE DATABASE octavia;
+GRANT ALL PRIVILEGES ON octavia.* TO 'octavia'@'localhost' IDENTIFIED BY '${OCTAVIA_DBPASS}';
+GRANT ALL PRIVILEGES ON octavia.* TO 'octavia'@'%' IDENTIFIED BY '${OCTAVIA_DBPASS}';
+EOF
+# /Octavia
+
 source admin-openrc
 
 openstack user create --domain default --password "${NEUTRON_PASS}" neutron
@@ -409,12 +398,22 @@ openstack endpoint create --region RegionOne network public "http://${CONTROLLER
 openstack endpoint create --region RegionOne network internal "http://${CONTROLLER_HOSTNAME}:9696"
 openstack endpoint create --region RegionOne network admin "http://${CONTROLLER_HOSTNAME}:9696"
 
-[ "$(lsb_release -cs)" = "xenial" ] && apt install -y python-neutron-fwaas || apt install -y python3-neutron-fwaas
+# Octavia
+openstack user create --domain default --password "${OCTAVIA_PASS}" octavia
+openstack role add --project service --user octavia admin
+openstack service create --name octavia --description "OpenStack Octavia" load-balancer
+openstack endpoint create --region RegionOne load-balancer public "http://${CONTROLLER_HOSTNAME}:9876"
+openstack endpoint create --region RegionOne load-balancer internal "http://${CONTROLLER_HOSTNAME}:9876"
+openstack endpoint create --region RegionOne load-balancer admin "http://${CONTROLLER_HOSTNAME}:9876"
+# /Octavia
+
+apt install -y python3-neutron-fwaas octavia-api octavia-health-manager octavia-housekeeping octavia-worker python3-octavia python3-octaviaclient
 apt install -y neutron-server neutron-plugin-ml2 neutron-linuxbridge-agent neutron-l3-agent neutron-dhcp-agent neutron-metadata-agent
 
 crudini --set /etc/neutron/neutron.conf database connection "mysql+pymysql://neutron:${NEUTRON_DBPASS}@${CONTROLLER_HOSTNAME}/neutron"
 crudini --set /etc/neutron/neutron.conf DEFAULT core_plugin ml2
 crudini --set /etc/neutron/neutron.conf DEFAULT service_plugins router
+#crudini --set /etc/neutron/neutron.conf DEFAULT service_plugins "router,firewall_v2,lbaas"
 crudini --set /etc/neutron/neutron.conf DEFAULT allow_overlapping_ips true
 crudini --set /etc/neutron/neutron.conf DEFAULT transport_url "rabbit://openstack:${RABBIT_PASS}@${CONTROLLER_HOSTNAME}"
 crudini --set /etc/neutron/neutron.conf DEFAULT auth_strategy keystone
@@ -443,6 +442,59 @@ crudini --set /etc/neutron/neutron.conf nova password "${NOVA_PASS}"
 # - https://bugs.launchpad.net/openstack-manuals/+bug/1624221
 # - https://bugs.launchpad.net/neutron/+bug/1812497
 crudini --set /etc/neutron/neutron.conf oslo_concurrency lock_path /var/lock/neutron
+
+# Octavia # https://docs.openstack.org/octavia/latest/install/install-ubuntu.html
+crudini --set /etc/octavia/octavia.conf database connection "mysql+pymysql://octavia:${OCTAVIA_DBPASS}@${CONTROLLER_HOSTNAME}/octavia"
+crudini --set /etc/octavia/octavia.conf DEFAULT transport_url "rabbit://openstack:${RABBIT_PASS}@${CONTROLLER_HOSTNAME}"
+crudini --set /etc/octavia/octavia.conf oslo_messaging topic octavia_prov
+crudini --set /etc/octavia/octavia.conf api_settings bind_host 0.0.0.0
+crudini --set /etc/octavia/octavia.conf api_settings bind_port 9876
+crudini --set /etc/octavia/octavia.conf keystone_authtoken auth_uri "http://${CONTROLLER_HOSTNAME}:5000"
+crudini --set /etc/octavia/octavia.conf keystone_authtoken www_authenticate_uri "http://${CONTROLLER_HOSTNAME}:5000"
+crudini --set /etc/octavia/octavia.conf keystone_authtoken auth_url "http://${CONTROLLER_HOSTNAME}:5000"
+crudini --set /etc/octavia/octavia.conf keystone_authtoken memcached_servers "${CONTROLLER_HOSTNAME}:11211"
+crudini --set /etc/octavia/octavia.conf keystone_authtoken auth_type password
+crudini --set /etc/octavia/octavia.conf keystone_authtoken project_domain_name default
+crudini --set /etc/octavia/octavia.conf keystone_authtoken user_domain_name default
+crudini --set /etc/octavia/octavia.conf keystone_authtoken project_name service
+crudini --set /etc/octavia/octavia.conf keystone_authtoken username octavia
+crudini --set /etc/octavia/octavia.conf keystone_authtoken password "${OCTAVIA_PASS}"
+crudini --set /etc/octavia/octavia.conf service_auth auth_uri "http://${CONTROLLER_HOSTNAME}:5000"
+crudini --set /etc/octavia/octavia.conf service_auth www_authenticate_uri "http://${CONTROLLER_HOSTNAME}:5000"
+crudini --set /etc/octavia/octavia.conf service_auth auth_url "http://${CONTROLLER_HOSTNAME}:5000"
+crudini --set /etc/octavia/octavia.conf service_auth memcached_servers "${CONTROLLER_HOSTNAME}:11211"
+crudini --set /etc/octavia/octavia.conf service_auth auth_type password
+crudini --set /etc/octavia/octavia.conf service_auth project_domain_name default
+crudini --set /etc/octavia/octavia.conf service_auth user_domain_name default
+crudini --set /etc/octavia/octavia.conf service_auth project_name service
+crudini --set /etc/octavia/octavia.conf service_auth username octavia
+crudini --set /etc/octavia/octavia.conf service_auth password "${OCTAVIA_PASS}"
+#crudini --set /etc/octavia/octavia.conf certificates server_certs_key_passphrase $(echo insecure-key-do-not-use-this-key | md5sum | awk '{print $1}' | base64 -w0)
+#crudini --set /etc/octavia/octavia.conf certificates ca_private_key_passphrase not-secure-passphrase
+crudini --set /etc/octavia/octavia.conf certificates ca_private_key /etc/octavia/certs/private/server_ca_key.pem
+crudini --set /etc/octavia/octavia.conf certificates ca_certificate /etc/octavia/certs/server_ca.cert.pem
+crudini --set /etc/octavia/octavia.conf haproxy_amphora server_ca /etc/octavia/certs/server_ca-chain.cert.pem
+crudini --set /etc/octavia/octavia.conf haproxy_amphora client_cert /etc/octavia/certs/private/client.cert-and-key.pem
+crudini --set /etc/octavia/octavia.conf health_manager bind_port 5555
+crudini --set /etc/octavia/octavia.conf health_manager bind_ip 172.16.0.2  # second ip of octavia mgmt subnet
+crudini --set /etc/octavia/octavia.conf health_manager controller_ip_port_list "172.16.0.2:5555"
+# /Octavia
+
+## FWAAS
+#crudini --set /etc/neutron/neutron.conf service_providers service_provider "FIREWALL_V2:fwaas_db:neutron_fwaas.services.firewall.service_drivers.agents.agents.FirewallAgentDriver:default"
+#crudini --set /etc/neutron/neutron_fwaas.conf service_providers service_provider "LOADBALANCER:Haproxy:neutron_lbaas.services.loadbalancer.drivers.haproxy.plugin_driver.HaproxyOnHostPluginDriver:default"
+#crudini --set /etc/neutron/neutron.conf service_providers service_provider "LOADBALANCER:Haproxy:neutron_lbaas.services.loadbalancer.drivers.haproxy.plugin_driver.HaproxyOnHostPluginDriver:default"
+
+crudini --set /etc/neutron/neutron_fwaas.conf service_providers service_provider "FIREWALL_V2:fwaas_db:neutron_fwaas.services.firewall.service_drivers.agents.agents.FirewallAgentDriver:default"
+crudini --set /etc/neutron/fwaas_driver.ini service_providers service_provider "FIREWALL_V2:fwaas_db:neutron_fwaas.services.firewall.service_drivers.agents.agents.FirewallAgentDriver:default"
+crudini --set /etc/neutron/fwaas_driver.ini fwaas enabled True
+crudini --set /etc/neutron/fwaas_driver.ini fwaas agent_version v2
+crudini --set /etc/neutron/fwaas_driver.ini fwaas driver neutron_fwaas.services.firewall.service_drivers.agents.drivers.linux.iptables_fwaas_v2.IptablesFwaasDriver
+crudini --set /etc/neutron/fwaas_driver.ini fwaas firewall_l2_driver noop
+
+#crudini --set /etc/neutron/l3_agent.ini AGENT extensions fwaas_v2
+#crudini --set /etc/neutron/plugins/ml2/ml2_conf.ini agent extensions fwaas_v2
+#crudini --set /etc/neutron/plugins/ml2/ml2_conf.ini fwaas firewall_l2_driver noop
 
 crudini --set /etc/neutron/plugins/ml2/ml2_conf.ini ml2 type_drivers "flat,vlan,vxlan"
 crudini --set /etc/neutron/plugins/ml2/ml2_conf.ini ml2 tenant_network_types vxlan
@@ -481,6 +533,9 @@ crudini --set /etc/nova/nova.conf neutron service_metadata_proxy true
 crudini --set /etc/nova/nova.conf neutron metadata_proxy_shared_secret "${METADATA_SECRET}"
 
 su -s /bin/sh -c "neutron-db-manage --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron
+su -s /bin/sh -c "neutron-db-manage --subproject neutron-fwaas --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron
+su -s /bin/sh -c "neutron-db-manage --config-file /etc/octavia/octavia.conf upgrade head" octavia
+
 service nova-api restart
 systemctl enable nova-api --now
 service neutron-server restart
@@ -488,6 +543,10 @@ systemctl enable neutron-server --now
 for i in linuxbridge dhcp metadata l3; do
   service "neutron-${i}-agent" restart
   systemctl enable "neutron-${i}-agent" --now
+done
+for i in api health-manager housekeeping worker; do
+  service "octavia-${i}" restart
+  systemctl enable "octavia-${i}" --now
 done
 
 # from Install and configure (Neutron) compute node https://docs.openstack.org/neutron/pike/install/compute-install-ubuntu.html
@@ -829,7 +888,7 @@ service apache2 restart
 
 echo "Starting installation of Cinder Backup Service"
 apt install -y cinder-backup
-[ "$(lsb_release -cs)" = "xenial" ] && crudini --set /etc/cinder/cinder.conf DEFAULT backup_driver cinder.backup.drivers.swift || crudini --set /etc/cinder/cinder.conf DEFAULT backup_driver cinder.backup.drivers.swift.SwiftBackupDriver
+crudini --set /etc/cinder/cinder.conf DEFAULT backup_driver cinder.backup.drivers.swift.SwiftBackupDriver
 crudini --set /etc/cinder/cinder.conf DEFAULT backup_swift_url "http://${CONTROLLER_HOSTNAME}:8080/v1/AUTH_"
 
 service cinder-backup restart
@@ -961,7 +1020,7 @@ service apache2 restart
 echo "Starting Horizon Installation"
 apt install -y openstack-dashboard
 [ "$(lsb_release -cs)" != "bionic" ] || apt install -y python-neutron-fwaas-dashboard
-[ "$(lsb_release -cs)" = "xenial" ] || apt install -y python3-heat-dashboard python3-neutron-fwaas-dashboard
+apt install -y python3-heat-dashboard python3-neutron-fwaas-dashboard python3-octavia-dashboard
 # Horizon is accessed from Host system via http://localhost:8080/horizon/, so we keep OPENSTACK_HOSTS="127.0.0.1" - this is the reason of not executing line below
 #sed -i "s/127.0.0.1/${CONTROLLER_IP}/g" /etc/openstack-dashboard/local_settings.py
 #sed -i "/^OPENSTACK_KEYSTONE_URL/s/v2.0/v3/" /etc/openstack-dashboard/local_settings.py

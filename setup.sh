@@ -29,26 +29,6 @@ resize2fs /dev/sda2
 crudini --set /etc/default/grub "" GRUB_CMDLINE_LINUX '"net.ifnames=0 biosdevname=0 nosplash verbose"'
 update-grub
 
-if [ "${VERSION_CODENAME}" = "xenial" ]; then
-cat <<- EOF > /etc/network/interfaces
-auto lo0
-iface lo inet loopback
-
-auto ${INTERNET_INTERFACE_NAME}
-iface ${INTERNET_INTERFACE_NAME} inet dhcp
-
-auto ${MANAGEMENT_INTERFACE_NAME}
-iface ${MANAGEMENT_INTERFACE_NAME} inet static
-  address ${CONTROLLER_IP}
-  netmask ${CONTROLLER_NETMASK}
-  dns-nameservers ${CONTROLLER_NAMESERVERS}
-
-auto ${PROVIDER_INTERFACE_NAME}
-iface ${PROVIDER_INTERFACE_NAME} inet manual
-  up ip link set dev ${PROVIDER_INTERFACE_NAME} up
-  down ip link set dev ${PROVIDER_INTERFACE_NAME} down
-EOF
-else
 rm -I /etc/netplan/*
 cat <<- EOF > /etc/netplan/50-vagrant.yaml
 network:
@@ -64,7 +44,6 @@ network:
     ${NAT_INTERFACE_NAME}:
       dhcp4: false
 EOF
-fi
 
 pvcreate "${OS_DATA_DEV:-/dev/sdc}"
 vgcreate "${OS_DATA_VG}" "${OS_DATA_DEV:-/dev/sdc}"
